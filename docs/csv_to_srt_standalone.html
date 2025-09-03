@@ -110,21 +110,51 @@ function processCsv(text, filename) {
         alert('CSV file is empty or invalid.');
         return;
     }
-    const headers = lines[0].split(',');
+    let headers = lines[0].split(',');
+    let headerLine = 0;
+    const required = ['Start (s)', 'Stop (s)', 'Behavior type', 'Behavior', 'Subject'];
+    function getMissingHeaders(hdrs) {
+        return required.filter(col => hdrs.indexOf(col) === -1);
+    }
+    let missing = getMissingHeaders(headers);
+    if (missing.length && lines.length > 1) {
+        headers = lines[1].split(',');
+        headerLine = 1;
+        missing = getMissingHeaders(headers);
+    }
     const startIdx = headers.indexOf('Start (s)');
     const stopIdx = headers.indexOf('Stop (s)');
     const typeIdx = headers.indexOf('Behavior type');
     const behIdx = headers.indexOf('Behavior');
     const subjIdx = headers.indexOf('Subject');
-    if (startIdx === -1 || stopIdx === -1 || typeIdx === -1 || behIdx === -1 || subjIdx === -1) {
-        alert('CSV headers missing required columns.');
+    // If only Start (s) and Stop (s) are present, proceed and fill missing columns with empty string
+    if ((startIdx !== -1 && stopIdx !== -1) && (typeIdx === -1 || behIdx === -1 || subjIdx === -1)) {
+        let srt = '';
+        for (let i = headerLine + 1; i < lines.length; i++) {
+            const row = lines[i].split(',');
+            if (row.length < headers.length) continue;
+            const idx = i - headerLine;
+            const start = secondsToSrtTime(row[startIdx]);
+            const stop = secondsToSrtTime(row[stopIdx]);
+            const type = typeIdx !== -1 ? row[typeIdx].trim().toUpperCase() : '';
+            const beh = behIdx !== -1 ? row[behIdx].trim() : '';
+            const subj = subjIdx !== -1 ? row[subjIdx].trim() : '';
+            const text = `${type}: ${beh}(${subj})`;
+            srt += `${idx}\n${start} --> ${stop}\n${text}\n\n`;
+        }
+        downloadSrt(srt, filename.replace(/\.(csv|xlsx)$/i, '.srt'));
+        document.getElementById('result').innerText = 'Conversion complete!';
+        return;
+    }
+    if (missing.length) {
+        alert('CSV headers missing required columns: ' + missing.join(', '));
         return;
     }
     let srt = '';
-    for (let i = 1; i < lines.length; i++) {
+    for (let i = headerLine + 1; i < lines.length; i++) {
         const row = lines[i].split(',');
         if (row.length < headers.length) continue;
-        const idx = i;
+        const idx = i - headerLine;
         const start = secondsToSrtTime(row[startIdx]);
         const stop = secondsToSrtTime(row[stopIdx]);
         const text = `${row[typeIdx].trim().toUpperCase()}: ${row[behIdx].trim()}(${row[subjIdx].trim()})`;
@@ -137,16 +167,42 @@ function processCsv(text, filename) {
 function processXlsx(json, filename) {
     // json is an array of objects, each representing a row
     const required = ['Start (s)', 'Stop (s)', 'Behavior type', 'Behavior', 'Subject'];
-    for (const col of required) {
-        if (!json[0] || !(col in json[0])) {
-            alert('XLSX file missing required columns.');
-            return;
+    let headerRow = 0;
+    function getMissingHeaders(obj) {
+        return required.filter(col => !(col in obj));
+    }
+    let missing = getMissingHeaders(json[0] || {});
+    if (missing.length && json.length > 1) {
+        missing = getMissingHeaders(json[1] || {});
+        if (!missing.length) headerRow = 1;
+    }
+    const hasStartStop = ('Start (s)' in json[headerRow]) && ('Stop (s)' in json[headerRow]);
+    // If only Start (s) and Stop (s) are present, proceed and fill missing columns with empty string
+    if (hasStartStop && missing.length) {
+        let srt = '';
+        for (let i = headerRow; i < json.length; i++) {
+            const row = json[i];
+            const idx = i - headerRow + 1;
+            const type = ('Behavior type' in row) ? row['Behavior type'].toString().trim().toUpperCase() : '';
+            const beh = ('Behavior' in row) ? row['Behavior'].toString().trim() : '';
+            const subj = ('Subject' in row) ? row['Subject'].toString().trim() : '';
+            const start = secondsToSrtTime(row['Start (s)']);
+            const stop = secondsToSrtTime(row['Stop (s)']);
+            const text = `${type}: ${beh}(${subj})`;
+            srt += `${idx}\n${start} --> ${stop}\n${text}\n\n`;
         }
+        downloadSrt(srt, filename.replace(/\.(csv|xlsx)$/i, '.srt'));
+        document.getElementById('result').innerText = 'Conversion complete!';
+        return;
+    }
+    if (missing.length) {
+        alert('XLSX file missing required columns: ' + missing.join(', '));
+        return;
     }
     let srt = '';
-    for (let i = 0; i < json.length; i++) {
+    for (let i = headerRow; i < json.length; i++) {
         const row = json[i];
-        const idx = i + 1;
+        const idx = i - headerRow + 1;
         const start = secondsToSrtTime(row['Start (s)']);
         const stop = secondsToSrtTime(row['Stop (s)']);
         const text = `${row['Behavior type'].toString().trim().toUpperCase()}: ${row['Behavior'].toString().trim()}(${row['Subject'].toString().trim()})`;
