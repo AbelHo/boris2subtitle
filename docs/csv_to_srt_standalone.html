@@ -69,7 +69,8 @@ function processCsv(text, filename) {
     const stopIdx = headers.indexOf('Stop (s)');
     const typeIdx = headers.indexOf('Behavior type');
     const behIdx = headers.indexOf('Behavior');
-    if (startIdx === -1 || stopIdx === -1 || typeIdx === -1 || behIdx === -1) {
+    const subjIdx = headers.indexOf('Subject');
+    if (startIdx === -1 || stopIdx === -1 || typeIdx === -1 || behIdx === -1 || subjIdx === -1) {
         alert('CSV headers missing required columns.');
         return;
     }
@@ -80,7 +81,7 @@ function processCsv(text, filename) {
         const idx = i;
         const start = secondsToSrtTime(row[startIdx]);
         const stop = secondsToSrtTime(row[stopIdx]);
-        const text = `${row[typeIdx].trim().toUpperCase()}: ${row[behIdx].trim()}`;
+        const text = `${row[typeIdx].trim().toUpperCase()}: ${row[behIdx].trim()}(${row[subjIdx].trim()})`;
         srt += `${idx}\n${start} --> ${stop}\n${text}\n\n`;
     }
     downloadSrt(srt, filename.replace(/\.(csv|xlsx)$/i, '.srt'));
@@ -89,7 +90,7 @@ function processCsv(text, filename) {
 
 function processXlsx(json, filename) {
     // json is an array of objects, each representing a row
-    const required = ['Start (s)', 'Stop (s)', 'Behavior type', 'Behavior'];
+    const required = ['Start (s)', 'Stop (s)', 'Behavior type', 'Behavior', 'Subject'];
     for (const col of required) {
         if (!json[0] || !(col in json[0])) {
             alert('XLSX file missing required columns.');
@@ -102,7 +103,7 @@ function processXlsx(json, filename) {
         const idx = i + 1;
         const start = secondsToSrtTime(row['Start (s)']);
         const stop = secondsToSrtTime(row['Stop (s)']);
-        const text = `${row['Behavior type'].toString().trim().toUpperCase()}: ${row['Behavior'].toString().trim()}`;
+        const text = `${row['Behavior type'].toString().trim().toUpperCase()}: ${row['Behavior'].toString().trim()}(${row['Subject'].toString().trim()})`;
         srt += `${idx}\n${start} --> ${stop}\n${text}\n\n`;
     }
     downloadSrt(srt, filename.replace(/\.(csv|xlsx)$/i, '.srt'));
