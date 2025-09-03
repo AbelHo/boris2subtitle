@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CSV/XLSX to SRT Converter</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 500px; margin: auto; }
+        input[type="file"] { margin-bottom: 20px; }
+        button { padding: 10px 20px; }
+        #result { margin-top: 20px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>CSV/XLSX to SRT Converter</h2>
+    <input type="file" id="inputFile" accept=".csv,.xlsx">
+    <button onclick="convertToSrt()">Convert & Download SRT</button>
+    <div id="result"></div>
+</div>
+<script>
+function secondsToSrtTime(seconds) {
+    seconds = parseFloat(seconds);
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    const millis = Math.round((seconds - Math.floor(seconds)) * 1000);
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')},${String(millis).padStart(3, '0')}`;
+}
+
+function convertToSrt() {
+    const fileInput = document.getElementById('inputFile');
+    if (!fileInput.files.length) {
+        alert('Please select a CSV or XLSX file.');
+        return;
+    }
+    const file = fileInput.files[0];
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (ext === 'csv') {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            processCsv(e.target.result, file.name);
+        };
+        reader.readAsText(file);
+    } else if (ext === 'xlsx') {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const json = XLSX.utils.sheet_to_json(firstSheet, {defval: ''});
+            processXlsx(json, file.name);
+        };
+        reader.readAsArrayBuffer(file);
+    } else {
+        alert('Unsupported file type.');
+    }
+}
+
+function processCsv(text, filename) {
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    if (lines.length < 2) {
+        alert('CSV file is empty or invalid.');
+        return;
+    }
+    const headers = lines[0].split(',');
+    const startIdx = headers.indexOf('Start (s)');
+    const stopIdx = headers.indexOf('Stop (s)');
+    const typeIdx = headers.indexOf('Behavior type');
+    const behIdx = headers.indexOf('Behavior');
+    if (startIdx === -1 || stopIdx === -1 || typeIdx === -1 || behIdx === -1) {
+        alert('CSV headers missing required columns.');
+        return;
+    }
+    let srt = '';
+    for (let i = 1; i < lines.length; i++) {
+        const row = lines[i].split(',');
+        if (row.length < headers.length) continue;
+        const idx = i;
+        const start = secondsToSrtTime(row[startIdx]);
+        const stop = secondsToSrtTime(row[stopIdx]);
+        const text = `${row[typeIdx].trim().toUpperCase()}: ${row[behIdx].trim()}`;
+        srt += `${idx}\n${start} --> ${stop}\n${text}\n\n`;
+    }
+    downloadSrt(srt, filename.replace(/\.(csv|xlsx)$/i, '.srt'));
+    document.getElementById('result').innerText = 'Conversion complete!';
+}
+
+function processXlsx(json, filename) {
+    // json is an array of objects, each representing a row
+    const required = ['Start (s)', 'Stop (s)', 'Behavior type', 'Behavior'];
+    for (const col of required) {
+        if (!json[0] || !(col in json[0])) {
+            alert('XLSX file missing required columns.');
+            return;
+        }
+    }
+    let srt = '';
+    for (let i = 0; i < json.length; i++) {
+        const row = json[i];
+        const idx = i + 1;
+        const start = secondsToSrtTime(row['Start (s)']);
+        const stop = secondsToSrtTime(row['Stop (s)']);
+        const text = `${row['Behavior type'].toString().trim().toUpperCase()}: ${row['Behavior'].toString().trim()}`;
+        srt += `${idx}\n${start} --> ${stop}\n${text}\n\n`;
+    }
+    downloadSrt(srt, filename.replace(/\.(csv|xlsx)$/i, '.srt'));
+    document.getElementById('result').innerText = 'Conversion complete!';
+}
+
+function downloadSrt(srt, filename) {
+    const blob = new Blob([srt], { type: 'text/plain' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+</script>
+</body>
+</html>
